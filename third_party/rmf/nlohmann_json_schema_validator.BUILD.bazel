@@ -1,0 +1,28 @@
+"""BUILD file for @nlohmann_json_schema_validator (pboettch/json-schema-validator 2.4.0).
+
+Small library — single-source C++ JSON Schema validator on top of
+nlohmann::json. Public header is src/nlohmann/json-schema.hpp; we re-export
+under that path via includes=["src"] so consumers use #include
+<nlohmann/json-schema.hpp>.
+"""
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "nlohmann_json_schema_validator",
+    srcs = [
+        "src/json-patch.cpp",
+        "src/json-patch.hpp",
+        "src/json-schema-draft7.json.cpp",
+        "src/json-uri.cpp",
+        "src/json-validator.cpp",
+        "src/smtp-address-validator.cpp",
+        "src/smtp-address-validator.hpp",
+        "src/string-format-check.cpp",
+    ],
+    hdrs = ["src/nlohmann/json-schema.hpp"],
+    includes = ["src"],
+    deps = ["@nlohmann_json//:json"],
+)

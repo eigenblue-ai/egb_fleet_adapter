@@ -1,0 +1,23 @@
+"""Minimal rosbag2_cpp typesupport-helpers shim.
+
+domain_bridge references exactly one rosbag2 function — get_typesupport_library
+in rosbag2_cpp/typesupport_helpers.hpp. Bazelizing the full rosbag2 stack
+for a single helper is overkill; we reimplement it on top of
+ament_index_cpp + rcpputils::SharedLibrary (both already exposed via
+rules_ros2). API matches upstream rosbag2_cpp::get_typesupport_library exactly.
+"""
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "rosbag2_cpp",
+    srcs = ["typesupport_helpers.cpp"],
+    hdrs = ["rosbag2_cpp/typesupport_helpers.hpp"],
+    includes = ["."],
+    deps = [
+        "@ros2_ament_index//:ament_index_cpp",
+        "@ros2_rclcpp//:rclcpp",
+    ],
+)

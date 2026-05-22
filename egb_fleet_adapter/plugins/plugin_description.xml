@@ -1,0 +1,26 @@
+<library path="lift_drop_actions_plugin">
+  <class type="egb_fleet::plugins::LiftDropActionFactory"
+         base_class_type="egb_fleet::action::RobotActionFactory">
+    <description>
+      Action factory for lift and drop operations (pickup/dropoff).
+    </description>
+  </class>
+</library>
+
+<library path="undock_action_plugin">
+  <class type="egb_fleet::plugins::UndockActionFactory"
+         base_class_type="egb_fleet::action::RobotActionFactory">
+    <description>
+      Action factory for undocking operations (backward navigation to clear space).
+    </description>
+  </class>
+</library>
+
+<library path="charging_action_plugin">
+  <class type="egb_fleet::plugins::ChargingActionFactory"
+         base_class_type="egb_fleet::action::RobotActionFactory">
+    <description>
+      Action factory for charging operations at charger waypoints.
+    </description>
+  </class>
+</library>

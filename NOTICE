@@ -1,0 +1,32 @@
+EgbFleetAdapter
+Copyright (c) 2026 The EgbFleetAdapter Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes software developed by third parties. Their licenses
+and attributions are listed in THIRD_PARTY_LICENSES.md.
+
+This product is compatible with, but is not affiliated with or endorsed by,
+the Open Source Robotics Foundation or the Open-RMF project. The fleet
+adapter architecture follows the patterns documented by the upstream
+open-rmf/rmf_ros2 project (rmf_fleet_adapter); the implementation here is
+original and does not bundle upstream sources.
+
+The Bazel build for this project fetches the following upstream sources at
+build time via `http_archive` and consumes them as deps:
+
+  - open-rmf/rmf_internal_msgs        (release-jazzy-240617)
+  - open-rmf/rmf_api_msgs             (release-jazzy-240617)
+  - open-rmf/rmf_building_map_msgs    (release-jazzy-240617)
+  - open-rmf/rmf_utils                (release-jazzy-240617)
+  - open-rmf/rmf_battery              (release-jazzy-240617)
+  - open-rmf/rmf_task                 (release-jazzy-240617)
+  - open-rmf/rmf_traffic              (release-jazzy-240617, vendored FCL 0.6)
+  - open-rmf/rmf_ros2                 (release-jazzy-240617)
+  - ros2/domain_bridge
+  - ros/pluginlib, ros/class_loader
+  - eclipse-zenoh/zenoh-c, eclipse-zenoh/zenoh-cpp
+
+Patches applied to these sources at build time are recorded under
+extensions/ in this repository and the patched files are not redistributed
+in source form here.

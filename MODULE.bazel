@@ -1,0 +1,176 @@
+module(
+    name = "egb_fleet",
+    version = "0.0.0",
+)
+
+# ---------------------------------------------------------------------------
+# Core build/runtime rules.
+# ---------------------------------------------------------------------------
+bazel_dep(name = "rules_cc", version = "0.1.1")
+bazel_dep(name = "rules_python", version = "1.1.0")
+bazel_dep(name = "rules_rust", version = "0.70.0")  # zenoh-c BCR 1.7.2 needs >=0.68
+bazel_dep(name = "rules_foreign_cc", version = "0.13.0")
+bazel_dep(name = "rules_shell", version = "0.3.0")
+bazel_dep(name = "platforms", version = "0.0.10")
+
+# Shared C++ libs (used by RMF / domain_bridge / fleet adapter).
+bazel_dep(name = "yaml-cpp", version = "0.8.0")
+
+# nlohmann_json pinned to the BCR revision used by sim-ci; target is
+# @nlohmann_json//:json (NOT //:nlohmann_json).
+bazel_dep(name = "nlohmann_json", version = "3.11.3.bcr.1", repo_name = "nlohmann_json")
+bazel_dep(name = "curl", version = "8.4.0.bcr.1")
+
+# Eigen (header-only); target @eigen//:eigen.
+bazel_dep(name = "eigen", version = "3.4.0.bcr.3")
+
+# Boost subset needed by rmf_websocket. Pin 1.83 because (a) boost.asio
+# 1.87+ removed `expires_from_now()` which websocketpp 0.8.2 still calls,
+# and (b) boost 1.88+ MODULE.bazel uses repo_name=None which Bazel 7.5
+# does not accept. 1.83 is the latest pre-deprecation that resolves cleanly.
+bazel_dep(name = "boost.asio", version = "1.83.0.bcr.1")
+bazel_dep(name = "boost.circular_buffer", version = "1.83.0.bcr.1")
+bazel_dep(name = "boost.system", version = "1.83.0.bcr.1")
+
+# zlib (rmf_traffic_ros2 schedule serializer).
+bazel_dep(name = "zlib", version = "1.3.1.bcr.3")
+
+# tinyxml2 (pluginlib XML plugin descriptor parser).
+bazel_dep(name = "tinyxml2", version = "10.0.0")
+
+# zstd (domain_bridge compresses transferred messages).
+bazel_dep(name = "zstd", version = "1.5.7")
+
+# zenoh — already in BCR; brings cdylib + headers + generated zenoh_configure.h
+# Targets: @zenoh-c//:zenoh-c (cc_library), @zenoh-cpp//:zenoh-cpp (header-only).
+bazel_dep(name = "zenoh-c", version = "1.7.2.bcr.1")
+bazel_dep(name = "zenoh-cpp", version = "1.7.2.bcr.1")
+
+# zenoh-c 1.7.2's cbindgen aspect crashes on crate_universe rust_library
+# targets where CrateInfo.root == None (e.g. zenoh-collections). Patch the
+# aspect to skip those crates instead of deref'ing None.
+single_version_override(
+    module_name = "zenoh-c",
+    patch_strip = 1,
+    patches = ["//extensions:zenoh_c_cargo_manifest_aspect_skip_null_root.patch"],
+    version = "1.7.2.bcr.1",
+)
+
+# zenoh-cpp 1.7.2's CancellationToken copy ctor takes a non-const ref,
+# which breaks std::optional<CancellationToken> instantiation under gcc 11.
+single_version_override(
+    module_name = "zenoh-cpp",
+    patch_strip = 1,
+    patches = ["//extensions:zenoh_cpp_cancellation_token_const_copy.patch"],
+    version = "1.7.2.bcr.1",
+)
+
+# PROJ (WGS84 coordinate transforms) — rmf_traffic_ros2/convert_Graph.cpp.
+bazel_dep(name = "proj", version = "9.8.0")
+
+# libuuid (util-linux) — rmf_traffic_ros2/schedule/Node.cpp uses uuid_generate.
+bazel_dep(name = "libuuid", version = "2.41.2")
+
+# libccd (FCL collision detection primitives).
+bazel_dep(name = "ccd", version = "2.1.0.bcr.1")
+# asio (standalone) + websocketpp — rmf_websocket transitively (BCR-managed).
+# NOTE: BCR's websocketpp 0.8.2 hard-requires boost.asio >= 1.87, but
+# boost.asio 1.87 removed `expires_from_now()` which websocketpp itself
+# still calls (upstream hasn't released a fix since 2020). The BCR module
+# is broken on Bazel 7.5 because of this. We keep the local http_archive
+# for websocketpp + asio in extensions/non_module_deps.bzl until either
+# websocketpp publishes 0.9 or the BCR module patches the API mismatch.
+
+# ---------------------------------------------------------------------------
+# rules_ros2 — pinned commit + srv_support patch. The patch adds
+# introspection typesupport for services and allows .srv/.action sources
+# alongside .msg in the ros2_interface_library glob.
+# ---------------------------------------------------------------------------
+bazel_dep(name = "com_github_mvukov_rules_ros2")
+archive_override(
+    module_name = "com_github_mvukov_rules_ros2",
+    patches = ["//extensions:rules_ros2_srv_support.patch"],
+    strip_prefix = "rules_ros2-4710585558693b62bdab089ca3d0f050b765c819",
+    urls = ["https://github.com/mvukov/rules_ros2/archive/4710585558693b62bdab089ca3d0f050b765c819.tar.gz"],
+)
+
+# Python toolchain — must match rules_ros2_pip_deps_numpy_headers (3.10).
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.10",
+)
+
+# Pip deps for the Python spawner (PyYAML for fleet_config_template.yaml parsing).
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "egb_fleet_pip",
+    python_version = "3.10",
+    requirements_lock = "//third_party:requirements.txt",
+)
+use_repo(pip, "egb_fleet_pip")
+
+# Rust toolchain — required by zenoh-c (Cargo-built C FFI). edition pinned
+# so rust_binary/rust_library targets without an explicit edition (e.g. the
+# auto-generated build_script_ target inside cargo_build_script) compile.
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    versions = ["1.88.0"],
+)
+
+register_toolchains(
+    "@com_github_mvukov_rules_ros2//repositories/rust:bindgen_toolchain",
+    dev_dependency = True,
+)
+
+# Pull rules_ros2's standard ROS2 repos.
+rules_ros2_non_module_deps = use_extension(
+    "@com_github_mvukov_rules_ros2//ros2:extensions.bzl",
+    "non_module_deps",
+)
+use_repo(
+    rules_ros2_non_module_deps,
+    "ros2_common_interfaces",
+    "ros2_geometry2",
+    "ros2_launch",
+    "ros2_launch_ros",
+    "ros2_rcl_interfaces",
+    "ros2_rclcpp",
+    "ros2_rclpy",
+    "ros2_rosidl",
+    "ros2cli",
+    # ros2_class_loader + console_bridge already brought in transitively by
+    # ros2_rclcpp; expose them by name so Phase 5 (pluginlib) can dep on them.
+    "console_bridge",
+    "ros2_ament_index",
+    "ros2_class_loader",
+)
+
+# ---------------------------------------------------------------------------
+# egb_fleet's own http_archive deps (RMF, pluginlib, domain_bridge, zenoh).
+# Wired up in subsequent phases; the .bzl module already exists so this
+# extension load is valid from Phase 0 onward.
+# ---------------------------------------------------------------------------
+non_module_deps = use_extension("//extensions:non_module_deps.bzl", "non_module_deps")
+use_repo(
+    non_module_deps,
+    # Phase 2 — RMF interface (msg) repos.
+    "rmf_building_map_msgs",
+    "rmf_internal_msgs",
+    # Phase 3 — leaf C++ utility libs.
+    "asio",
+    "rmf_utils",
+    "websocketpp",
+    # Phase 4 — RMF C++ libs + their non-RMF deps.
+    "nlohmann_json_schema_validator",
+    "rmf_api_msgs",
+    "rmf_battery",
+    "rmf_ros2",
+    "rmf_task",
+    "rmf_traffic",
+    # Phase 5 — pluginlib (class_loader is via @ros2_class_loader).
+    "pluginlib",
+    # Phase 6 — domain_bridge.
+    "domain_bridge",
+)

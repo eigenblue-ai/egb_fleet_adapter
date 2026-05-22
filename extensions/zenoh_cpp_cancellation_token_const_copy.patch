@@ -1,0 +1,23 @@
+Make CancellationToken's copy constructor const-callable.
+
+The original copy constructor takes a non-const reference, which prevents
+gcc 11's libstdc++ from synthesising a defaulted const-copy constructor
+for `std::optional<CancellationToken>` (used in querier.hxx). Take
+`const&` and `const_cast` in the body — the underlying
+`z_cancellation_token_clone` call only reads the loaned ptr, so this is
+semantically equivalent.
+
+--- a/include/zenoh/api/cancellation.hxx
++++ b/include/zenoh/api/cancellation.hxx
+@@ -37,8 +37,9 @@ class CancellationToken : public Owned<::z_owned_cancellation_token_t> {
+     /// @brief Copy constructor.
+     ///
+     /// Cancelling a token also cancels all of its copies.
+-    CancellationToken(CancellationToken& other) : Owned(nullptr) {
+-        ::z_cancellation_token_clone(interop::as_owned_c_ptr(*this), interop::as_loaned_c_ptr(other));
++    CancellationToken(const CancellationToken& other) : Owned(nullptr) {
++        ::z_cancellation_token_clone(interop::as_owned_c_ptr(*this),
++                                     interop::as_loaned_c_ptr(const_cast<CancellationToken&>(other)));
+     }
+
+     /// @name Operators

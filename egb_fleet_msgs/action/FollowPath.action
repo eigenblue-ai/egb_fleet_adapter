@@ -1,0 +1,13 @@
+# Goal - Path to follow
+egb_fleet_msgs/Node[] nodes           # Nodes in the path
+egb_fleet_msgs/Edge[] edges           # Edges connecting the nodes
+string order_id                       # Order/task identifier
+---
+# Result - Final status
+bool success
+string message
+---
+# Feedback - Real-time path execution progress
+# Minimal feedback for waypoint progress calculation
+uint32 closest_pose_index             # Index of closest pose on interpolated path
+bool local_planning_failed            # Whether MPC planning failed

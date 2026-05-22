@@ -1,0 +1,241 @@
+"""BUILD file for @rmf_ros2 (open-rmf/rmf_ros2 2.12.0).
+
+Bundles 4 libraries we care about:
+  rmf_websocket       — websocket broadcast client/server
+  rmf_traffic_ros2    — ROS2 wrapper around rmf_traffic; convert_Graph uses
+                        PROJ for GPS↔local coordinate transforms
+  rmf_task_ros2       — ROS2 wrapper around rmf_task
+  rmf_fleet_adapter   — the headline library; 75+ cpp files, links everything
+
+HERMETICITY GAPS (system libs via linkopts):
+  -lproj  : libproj (PROJ.4) for WGS84 transforms in convert_Graph.cpp;
+            bazelizing PROJ from source pulls in SQLite + CMake configure
+            logic — deferred until/unless the user wants that pulled in too.
+  -luuid  : libuuid (e2fsprogs); single linkopt.
+  backward_ros: stripped — purely a runtime crash-trace convenience, no
+                source references in the libs.
+"""
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# ---------------------------------------------------------------------------
+# rmf_websocket
+# ---------------------------------------------------------------------------
+cc_library(
+    name = "rmf_websocket",
+    srcs = [
+        "rmf_websocket/src/rmf_websocket/BroadcastClient.cpp",
+        "rmf_websocket/src/rmf_websocket/BroadcastServer.cpp",
+        "rmf_websocket/src/rmf_websocket/client/ClientWebSocketEndpoint.cpp",
+        "rmf_websocket/src/rmf_websocket/client/ClientWebSocketEndpoint.hpp",
+        "rmf_websocket/src/rmf_websocket/utils/RingBuffer.hpp",
+    ],
+    hdrs = glob(["rmf_websocket/include/rmf_websocket/**/*.hpp"]),
+    includes = ["rmf_websocket/include"],
+    linkopts = ["-pthread"],
+    deps = [
+        # rmf_websocket references boost::asio types directly (not standalone
+        # asio), so we use the BCR boost.asio module rather than the
+        # standalone @asio target.
+        "@boost.asio//:boost.asio",
+        "@boost.circular_buffer//:boost.circular_buffer",
+        "@boost.system//:boost.system",
+        "@nlohmann_json//:json",
+        "@nlohmann_json_schema_validator",
+        "@rmf_utils",
+        "@ros2_rclcpp//:rclcpp",
+        "@websocketpp",
+    ],
+)
+
+# ---------------------------------------------------------------------------
+# rmf_traffic_ros2
+# ---------------------------------------------------------------------------
+cc_library(
+    name = "rmf_traffic_ros2",
+    srcs = glob(
+        [
+            "rmf_traffic_ros2/src/**/*.cpp",
+            "rmf_traffic_ros2/src/**/*.hpp",
+        ],
+        # The rmf_traffic_schedule, _monitor, _blockade, update_participant
+        # executables each ship their own main.cpp — strip them out, we don't
+        # build those executables here.
+        exclude = ["rmf_traffic_ros2/src/**/main.cpp"],
+    ),
+    hdrs = glob(["rmf_traffic_ros2/include/rmf_traffic_ros2/**/*.hpp"]),
+    includes = ["rmf_traffic_ros2/include"],
+    linkopts = ["-pthread"],
+    deps = [
+        "@eigen",
+        "@libuuid//:uuid",
+        "@nlohmann_json//:json",
+        "@proj",
+        "@rmf_building_map_msgs//:cpp_rmf_building_map_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_site_map_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_traffic_msgs",
+        "@rmf_traffic",
+        "@rmf_utils",
+        "@ros2_rclcpp//:rclcpp",
+        "@yaml-cpp//:yaml-cpp",
+        "@zlib",
+    ],
+)
+
+# ---------------------------------------------------------------------------
+# rmf_task_ros2
+# ---------------------------------------------------------------------------
+cc_library(
+    name = "rmf_task_ros2",
+    srcs = glob(
+        [
+            "rmf_task_ros2/src/**/*.cpp",
+            "rmf_task_ros2/src/**/*.hpp",
+        ],
+        # rmf_bidder_node and rmf_task_dispatcher each have their own main.cpp.
+        exclude = ["rmf_task_ros2/src/**/main.cpp"],
+    ),
+    hdrs = glob(["rmf_task_ros2/include/rmf_task_ros2/**/*.hpp"]),
+    includes = ["rmf_task_ros2/include"],
+    deps = [
+        ":rmf_traffic_ros2",
+        ":rmf_websocket",
+        "@eigen",
+        "@nlohmann_json//:json",
+        "@nlohmann_json_schema_validator",
+        "@rmf_api_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_task_msgs",
+        "@rmf_task",
+        "@rmf_task//:rmf_task_sequence",
+        "@rmf_traffic",
+        "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_rclcpp//:rclcpp",
+    ],
+)
+
+# ---------------------------------------------------------------------------
+# rmf_fleet_adapter (the headline library)
+# ---------------------------------------------------------------------------
+
+# rmf_fleet_adapter ships 14 JSON schemas that get embedded into headers via
+# the upstream rmf_api_generate_schema_headers CMake helper. Same pattern as
+# rmf_api_msgs / rmf_task_sequence.
+# Schema list mirrors rmf_ros2 2.7.2's rmf_fleet_adapter/schemas/*.json
+# (Jazzy 240617 coordinated release).
+_FLEET_ADAPTER_SCHEMAS = [
+    "event_description__clean",
+    "event_description__dropoff",
+    "event_description__go_to_place",
+    "event_description__payload_transfer",
+    "event_description__perform_action",
+    "event_description__pickup",
+    "event_description__sequence",
+    "place",
+    "task_description__clean",
+    "task_description__compose",
+    "task_description__delivery",
+    "task_description__patrol",
+]
+
+[
+    genrule(
+        name = "fleet_adapter_schema_" + name + "_hpp",
+        srcs = ["rmf_fleet_adapter/schemas/" + name + ".json"],
+        outs = ["rmf_fleet_adapter/gen/rmf_fleet_adapter/schemas/" + name + ".hpp"],
+        cmd = (
+            "upper=$$(echo " + name + " | tr '[:lower:]' '[:upper:]') && " +
+            "{ echo '/* Generated by Bazel from " + name + ".json */'; " +
+            "  echo \"#ifndef RMF_FLEET_ADAPTER__SCHEMAS__$$upper\"; " +
+            "  echo \"#define RMF_FLEET_ADAPTER__SCHEMAS__$$upper\"; " +
+            "  echo '#include <nlohmann/json.hpp>'; " +
+            "  echo 'namespace rmf_fleet_adapter { namespace schemas {'; " +
+            "  echo 'static const nlohmann::json " + name + " ='; " +
+            "  echo 'R\"raw_schema('; " +
+            "  cat $<; " +
+            "  echo ')raw_schema\"_json;'; " +
+            "  echo '}}'; " +
+            "  echo \"#endif // RMF_FLEET_ADAPTER__SCHEMAS__$$upper\"; " +
+            "} > $@"
+        ),
+    )
+    for name in _FLEET_ADAPTER_SCHEMAS
+]
+
+cc_library(
+    name = "rmf_fleet_adapter",
+    srcs = glob(
+        [
+            "rmf_fleet_adapter/src/**/*.cpp",
+            "rmf_fleet_adapter/src/**/*.hpp",
+            "rmf_fleet_adapter/src/**/*.h",
+        ],
+        # Exclude main.cpp files — these belong to executables we don't ship.
+        exclude = [
+            "rmf_fleet_adapter/src/**/main.cpp",
+            "rmf_fleet_adapter/src/lift_supervisor/Node.cpp",
+            "rmf_fleet_adapter/src/lift_supervisor/Node.hpp",
+            "rmf_fleet_adapter/src/mutex_group_supervisor/main.cpp",
+            "rmf_fleet_adapter/src/experimental_lift_watchdog/Node.cpp",
+            "rmf_fleet_adapter/src/experimental_lift_watchdog/Node.hpp",
+            "rmf_fleet_adapter/src/read_only/Node.cpp",
+            "rmf_fleet_adapter/src/read_only/Node.hpp",
+            "rmf_fleet_adapter/src/read_only_blockade/Node.cpp",
+            "rmf_fleet_adapter/src/read_only_blockade/Node.hpp",
+            "rmf_fleet_adapter/src/mock_traffic_light/Node.cpp",
+            "rmf_fleet_adapter/src/mock_traffic_light/Node.hpp",
+            "rmf_fleet_adapter/src/full_control/main.cpp",
+            "rmf_fleet_adapter/src/full_control/FleetAdapterNode.cpp",
+            "rmf_fleet_adapter/src/full_control/FleetAdapterNode.hpp",
+        ],
+    ),
+    hdrs = glob([
+        "rmf_fleet_adapter/include/rmf_fleet_adapter/**/*.hpp",
+        # Vendored rmf_rxcpp + RxCpp 4.1.0 inside rmf_fleet_adapter/rmf_rxcpp/.
+        "rmf_fleet_adapter/rmf_rxcpp/include/rmf_rxcpp/**/*.hpp",
+        "rmf_fleet_adapter/rmf_rxcpp/RxCpp-4.1.0/Rx/v2/src/**/*.hpp",
+    ]) + [
+        ":fleet_adapter_schema_" + name + "_hpp"
+        for name in _FLEET_ADAPTER_SCHEMAS
+    ],
+    includes = [
+        "rmf_fleet_adapter/include",
+        # Generated schema headers: <rmf_fleet_adapter/schemas/...>.
+        "rmf_fleet_adapter/gen",
+        # rmf_rxcpp headers expect to be included as <rmf_rxcpp/...>.
+        "rmf_fleet_adapter/rmf_rxcpp/include",
+        # RxCpp headers expect to be included as <rxcpp/...>.
+        "rmf_fleet_adapter/rmf_rxcpp/RxCpp-4.1.0/Rx/v2/src",
+    ],
+    linkopts = ["-pthread"],
+    deps = [
+        ":rmf_task_ros2",
+        ":rmf_traffic_ros2",
+        ":rmf_websocket",
+        "@eigen",
+        "@nlohmann_json//:json",
+        "@nlohmann_json_schema_validator",
+        "@rmf_api_msgs",
+        "@rmf_battery",
+        "@rmf_building_map_msgs//:cpp_rmf_building_map_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_charger_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_dispenser_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_door_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_fleet_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_ingestor_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_lift_msgs",
+        "@rmf_internal_msgs//:cpp_rmf_task_msgs",
+        "@rmf_task",
+        "@rmf_task//:rmf_task_sequence",
+        "@rmf_traffic",
+        "@rmf_utils",
+        "@ros2_common_interfaces//:cpp_geometry_msgs",
+        "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_rclcpp//:rclcpp_action",
+        "@ros2_rclcpp//:rclcpp_components",
+        "@ros2_rclcpp//:rclcpp_lifecycle",
+        "@yaml-cpp//:yaml-cpp",
+    ],
+)

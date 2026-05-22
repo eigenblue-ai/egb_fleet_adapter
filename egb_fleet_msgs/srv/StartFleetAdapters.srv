@@ -1,0 +1,7 @@
+# Start multiple fleet adapters (batch operation)
+
+FleetAdapterParams[] adapters
+
+---
+bool[] success
+string[] messages

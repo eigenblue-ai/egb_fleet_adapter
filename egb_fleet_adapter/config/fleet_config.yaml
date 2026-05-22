@@ -1,0 +1,89 @@
+# FLEET CONFIG =================================================================
+# RMF Fleet parameters
+
+rmf_fleet:
+  name: "fleet"
+  limits:
+    linear: [2.5, 0.5] # velocity, acceleration
+    angular: [1.0, 0.25] # velocity, acceleration
+  profile: # Robot profile is modelled as a circle
+    footprint: 0.3 # radius in m
+    vicinity: 6.0 # radius in m
+  reversible: True # whether robots in this fleet can reverse
+  nav_graph_url: "http://imrmf-map-editor:30010" # imrmf editor HTTP endpoint
+  building_id: "H12" # building id in imrmf storage (S3)
+  nav_graph_id: "0" # nav graph served as {nav_graph_id}.yaml
+  nav_graph_timeout_s: 30.0 # HTTP fetch timeout
+  battery_system:
+    voltage: 12.0 # V
+    capacity: 24.0 # Ahr
+    charging_current: 5.0 # A
+  mechanical_system:
+    mass: 20.0 # kg
+    moment_of_inertia: 10.0 #kgm^2
+    friction_coefficient: 0.22
+  ambient_system:
+    power: 20.0 # W
+  tool_system:
+    power: 0.0 # W
+  recharge_threshold: 0.10 # Battery level below which robots in this fleet will not operate
+  recharge_soc: 1.0 # Battery level to which robots in this fleet should be charged up to during recharging tasks
+  publish_fleet_state: 10.0 # Publish frequency for fleet state, ensure that it is same as robot_state_update_frequency
+  account_for_battery_drain: True
+  task_capabilities: # Specify the types of RMF Tasks that robots in this fleet are capable of performing
+    loop: True
+    delivery: True
+    perform_action: True
+    compose: True
+  finishing_request: "nothing" # [park, charge, nothing]
+  responsive_wait: False # Should responsive wait be on/off for the whole fleet by default? False if not specified.
+
+  # Dynamic robot discovery configuration
+  dynamic_discovery:
+    enabled: True
+    robot_name_pattern: "robot_[a-z0-9]{4}" # Matches robot_xxxx
+    discovery_frequency: 0.5 # Check every 2 seconds (0.5 Hz)
+    rest_endpoint: "http://localhost:8080" # Zenoh bridge REST API endpoint
+
+  # Template configuration for dynamically discovered robots
+  robot_template:
+    map_frame: "map"
+    robot_frame: "base_link"
+    charger: "charger"
+    responsive_wait: False
+    navigation_stack: 2
+    initial_map: "Floor0"
+
+    # Control adapter configuration
+    # Options: "ros2" (default), "mpc"
+    control_adapter:
+      type: "mpc" # Switch to MPC controller for minimum-time navigation
+
+    maps:
+      Floor0:
+        map_url: ""
+      Floor1:
+        map_url: ""
+
+  robot_state_update_frequency: 20.0 # Hz
+
+# PLUGIN CONFIG ================================================================
+plugins:
+  egb_fleet::plugins::LiftDropActionFactory:
+    actions: ["pickup", "dropoff"]
+  egb_fleet::plugins::UndockActionFactory:
+    actions: ["undock"]
+
+# TRANSFORM CONFIG =============================================================
+# For computing transforms between Robot and RMF coordinate systems
+
+# Optional
+# Identity: if the World->map TF in the simulator already aligns the robot
+# map frame with the rmf nav-graph frame, no transform is needed here.
+reference_coordinates:
+  Floor0:
+    rmf: [[0, 0]]
+    robot: [[0, 0]]
+  Floor1:
+    rmf: [[0, 0]]
+    robot: [[0, 0]]

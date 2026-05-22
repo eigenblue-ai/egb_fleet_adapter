@@ -1,0 +1,45 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl git unzip zip \
+        build-essential cmake gcc clang lld \
+        python3 \
+        libffi-dev libssl-dev libsqlite3-0 zlib1g \
+        libatomic1 libstdc++6 libuuid1 libssl3 \
+        tini \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CC=clang
+ENV CXX=clang++
+
+RUN if id 1000 >/dev/null 2>&1; then \
+      deluser "$(getent passwd 1000 | cut -d: -f1)"; \
+    fi && \
+    useradd -m -u 1000 -s /bin/bash bazeluser && \
+    chown -R bazeluser:bazeluser /home/bazeluser
+
+RUN install -d -o bazeluser -g bazeluser /home/bazeluser/egb_fleet
+WORKDIR /home/bazeluser/egb_fleet
+
+COPY --chown=bazeluser:bazeluser .bazelversion .
+RUN export BAZEL_VERSION="$(cat .bazelversion)" && \
+    curl -fsSL "https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-linux-x86_64" \
+         -o /usr/local/bin/bazel && \
+    chmod +x /usr/local/bin/bazel
+
+COPY --chown=bazeluser:bazeluser . /home/bazeluser/egb_fleet
+
+USER bazeluser
+ENV PATH="/usr/local/bin:${PATH}"
+
+RUN bazel build \
+        //egb_fleet_spawner:launch_all \
+        //egb_fleet_adapter:fleet_adapter_node && \
+    bazel shutdown && \
+    rm -rf /home/bazeluser/.bazel_output_egb_fleet/sandbox
+
+ENV EGB_FLEET_ADAPTER_NODE=/home/bazeluser/egb_fleet/bazel-bin/egb_fleet_adapter/fleet_adapter_node \
+    RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+CMD ["/bin/bash", "-l"]

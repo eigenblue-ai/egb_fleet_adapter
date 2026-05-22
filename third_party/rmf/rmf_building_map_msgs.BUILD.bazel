@@ -1,0 +1,34 @@
+"""BUILD file for the @rmf_building_map_msgs repository.
+
+Mirrors the pattern used by tools/imrmf-map-editor/third_party/rmf_building_map_msgs.BUILD.bazel —
+the archive is downloaded with strip_prefix="rmf_building_map_msgs-X.Y.Z" so the
+.msg/.srv files live under rmf_building_map_msgs/{msg,srv}/.
+"""
+
+load(
+    "@com_github_mvukov_rules_ros2//ros2:interfaces.bzl",
+    "cpp_ros2_interface_library",
+    "py_ros2_interface_library",
+    "ros2_interface_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+ros2_interface_library(
+    name = "rmf_building_map_msgs",
+    srcs = glob([
+        "rmf_building_map_msgs/msg/*.msg",
+        "rmf_building_map_msgs/srv/*.srv",
+    ]),
+    deps = ["@ros2_common_interfaces//:geometry_msgs"],
+)
+
+cpp_ros2_interface_library(
+    name = "cpp_rmf_building_map_msgs",
+    deps = [":rmf_building_map_msgs"],
+)
+
+py_ros2_interface_library(
+    name = "py_rmf_building_map_msgs",
+    deps = [":rmf_building_map_msgs"],
+)

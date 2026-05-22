@@ -1,0 +1,30 @@
+Emit a stub Cargo.toml when root_src is None.
+
+Some crate_universe-generated rust_library targets expose CrateInfo with
+.root == None (e.g. workspace-only crates that re-export deps — zenoh-
+collections, zenoh-result). The aspect would crash at the `root_src.path`
+deref in the template. Returning [] early leaves the declared manifest
+file with no generating action (downstream aspect consumers still expect
+it to exist). Write a stub Cargo.toml and return the normal providers.
+
+--- a/cbindgen/cargo_manifest.bzl
++++ b/cbindgen/cargo_manifest.bzl
+@@ -274,3 +274,18 @@ def _cargo_manifest_aspect_impl(target, ctx):
+         root_src = _find_crate_root_from_srcs(src_files)
+         if not root_src:
+             fail("Could not find crate root (lib.rs or main.rs) in srcs for {}".format(target.label))
++
++    # Some crate_universe rust_library targets expose CrateInfo with .root
++    # == None (workspace-only crates that re-export deps, e.g.
++    # zenoh-collections, zenoh-result). Write a stub Cargo.toml so the
++    # already-declared `manifest` output has a generating action and
++    # downstream aspect consumers still see CargoManifestInfo on this dep.
++    if not root_src:
++        ctx.actions.write(
++            output = manifest,
++            content = "# stub manifest: {} has no crate root\n".format(target.label),
++        )
++        return [
++            CargoManifestInfo(toml = manifest, deps = depset()),
++            OutputGroupInfo(all_files = depset([manifest])),
++        ]

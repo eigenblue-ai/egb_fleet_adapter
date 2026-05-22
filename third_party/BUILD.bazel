@@ -1,0 +1,3 @@
+# Marker so third_party/ is a Bazel package; *.BUILD.bazel files here are
+# referenced as build_file for external http_archive repos.
+exports_files(glob(["**/*.BUILD.bazel"]))

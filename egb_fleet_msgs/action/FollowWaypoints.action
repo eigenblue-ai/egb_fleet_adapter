@@ -1,0 +1,18 @@
+# GOAL
+# Waypoints and lanes to navigate through
+egb_fleet_msgs/Waypoint[] waypoints    # Waypoints to visit in order
+egb_fleet_msgs/Lane[] lanes            # Lanes connecting the waypoints
+
+---
+
+# RESULT
+# Final execution status
+bool success                     # Whether all waypoints were successfully visited
+string message                   # Result message
+
+---
+
+# FEEDBACK
+# Waypoint-level progress information
+uint32 target_waypoint_index     # Index of current target waypoint
+float64 eta_seconds              # Estimated time to reach target waypoint

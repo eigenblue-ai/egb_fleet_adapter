@@ -1,0 +1,83 @@
+"""BUILD file for @domain_bridge (ros2/domain_bridge 0.5.0).
+
+Two targets:
+  :domain_bridge_msgs — the in-tree CompressedMsg.msg (interface library)
+  :domain_bridge     — the C++ library (10 source files)
+
+The upstream find_package(rosbag2_cpp) is replaced with our local
+@egb_fleet//third_party/rosbag2_shim:rosbag2_cpp (single typesupport-helpers
+function — see that file's BUILD for rationale).
+"""
+
+load(
+    "@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl",
+    "ros2_cpp_binary",
+)
+load(
+    "@com_github_mvukov_rules_ros2//ros2:interfaces.bzl",
+    "cpp_ros2_interface_library",
+    "ros2_interface_library",
+)
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Upstream's CompressedMsg lives in the `domain_bridge` package (same name as
+# the C++ library), and source code includes <domain_bridge/msg/compressed_msg.hpp>.
+# The ros2_interface_library target name becomes the package name in the
+# generated header path, so we name the msg target :domain_bridge and the
+# C++ library :domain_bridge_lib to disambiguate.
+ros2_interface_library(
+    name = "domain_bridge",
+    srcs = ["msg/CompressedMsg.msg"],
+)
+
+cpp_ros2_interface_library(
+    name = "cpp_domain_bridge_msgs",
+    deps = [":domain_bridge"],
+)
+
+# Upstream produces a `domain_bridge` executable from src/domain_bridge.cpp
+# that takes a YAML config and bridges topics across DDS domains. The
+# fleet_spawner_with_bridge.launch.py uses this for the /clock bridge.
+# Target name is `domain_bridge_node` so it doesn't collide with the
+# `:domain_bridge` ros2_interface_library target above.
+ros2_cpp_binary(
+    name = "domain_bridge_node",
+    srcs = ["src/domain_bridge.cpp"],
+    idl_deps = [
+        "@ros2_rcl_interfaces//:rosgraph_msgs",
+    ],
+    # set_up_ament=True populates a Bazel-built AMENT_PREFIX_PATH tree in
+    # runfiles (NOT /opt/ros). idl_deps lists message packages whose
+    # rosidl_typesupport_cpp .so domain_bridge dlopens at runtime —
+    # rosgraph_msgs is needed because /clock is the canonical use case.
+    # Add more here if the bridge config references additional msg types.
+    set_up_ament = True,
+    deps = [
+        ":domain_bridge_lib",
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_rclcpp//:rclcpp_components",
+    ],
+)
+
+cc_library(
+    name = "domain_bridge_lib",
+    srcs = glob([
+        "src/domain_bridge/*.cpp",
+        "src/domain_bridge/*.hpp",
+    ]),
+    hdrs = glob([
+        "include/domain_bridge/**/*.hpp",
+        "include/domain_bridge/**/*.inc",
+    ]),
+    includes = ["include"],
+    deps = [
+        ":cpp_domain_bridge_msgs",
+        "@egb_fleet//third_party/rosbag2_shim:rosbag2_cpp",
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_rclcpp//:rclcpp_components",
+        "@yaml-cpp//:yaml-cpp",
+        "@zstd",
+    ],
+)

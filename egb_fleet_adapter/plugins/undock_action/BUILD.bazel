@@ -1,0 +1,28 @@
+load("@com_github_mvukov_rules_ros2//ros2:plugin.bzl", "ros2_plugin")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "hdrs",
+    hdrs = glob(["include/**/*.hpp"]),
+    includes = ["include"],
+)
+
+ros2_plugin(
+    name = "undock_action_plugin",
+    srcs = ["src/undock_action.cpp"],
+    plugin_specs = [
+        {
+            "class_type": "egb_fleet::plugins::UndockActionFactory",
+            "base_class_type": "egb_fleet::action::RobotActionFactory",
+        },
+    ],
+    deps = [
+        ":hdrs",
+        "//egb_fleet_adapter",
+        "@pluginlib",
+        "@rmf_ros2//:rmf_fleet_adapter",
+        "@ros2_rclcpp//:rclcpp",
+    ],
+)

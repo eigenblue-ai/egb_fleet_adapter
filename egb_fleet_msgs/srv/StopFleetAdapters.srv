@@ -1,0 +1,7 @@
+# Stop multiple fleet adapters (batch operation)
+
+string[] fleet_names
+
+---
+bool[] success
+string[] messages

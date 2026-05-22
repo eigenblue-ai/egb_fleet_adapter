@@ -1,0 +1,17 @@
+"""BUILD file for @rmf_utils (open-rmf/rmf_utils).
+
+Mostly headers (impl_ptr, clone_ptr, optional, math, ...) plus a small
+RateLimiter.cpp compiled into the library.
+"""
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "rmf_utils",
+    srcs = ["rmf_utils/src/rmf_utils/RateLimiter.cpp"],
+    hdrs = glob(["rmf_utils/include/rmf_utils/*.hpp"]),
+    includes = ["rmf_utils/include"],
+    strip_include_prefix = "rmf_utils/include",
+)

@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>egb_fleet_adapter</name>
+  <version>1.0.0</version>
+  <description>C++ fleet adapter with RMF FullControl integration for AMR fleets</description>
+  <maintainer email="opensource@eigenblue.ai">The EgbFleetAdapter Authors</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Core ROS2 dependencies -->
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>rclcpp_components</depend>
+
+  <!-- RMF dependencies -->
+  <depend>rmf_fleet_adapter</depend>
+  <depend>rmf_battery</depend>
+  <depend>rmf_traffic</depend>
+  <depend>rmf_traffic_ros2</depend>
+  <depend>rmf_task</depend>
+  <depend>rmf_fleet_msgs</depend>
+  <depend>rmf_task_msgs</depend>
+  <depend>rmf_building_map_msgs</depend>
+
+  <!-- ROS2 message dependencies -->
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>action_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>egb_fleet_msgs</depend>
+
+  <!-- TF2 dependencies -->
+  <depend>tf2_ros</depend>
+  <depend>tf2_eigen</depend>
+  <depend>tf2_geometry_msgs</depend>
+
+  <!-- Utilities -->
+  <depend>pluginlib</depend>
+  <depend>eigen3_cmake_module</depend>
+
+  <!-- Third-party C++ libraries (available via rosdep) -->
+  <depend>libyaml-cpp-dev</depend>
+  <depend>libeigen3-dev</depend>
+  <depend>nlohmann-json-dev</depend>
+
+  <!-- Testing dependencies -->
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <pluginlib plugin="${prefix}/plugins/plugin_description.xml"/>
+  </export>
+</package>

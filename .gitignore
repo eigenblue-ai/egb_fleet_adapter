@@ -1,0 +1,8 @@
+# Bazel symlinks created next to the workspace root.
+bazel-*
+
+# User-local bazelrc overrides (out-of-band per-machine flags).
+user.bazelrc
+
+# Bazel outputs staged for the image build.
+/dist/

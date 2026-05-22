@@ -1,0 +1,37 @@
+startup --output_base=../.bazel_output_egb_fleet
+
+# https://github.com/bazelbuild/rules_foreign_cc/issues/1129
+# Mandatory at the moment for Bazel 7.x.
+build --noincompatible_sandbox_hermetic_tmp
+
+# Fix the wrong default to generate __init__.py to delimit a Python package.
+build --incompatible_default_to_explicit_init_py
+
+# All code compiled with C++17 — ROS 2 Humble/Jazzy min, googletest >=1.13 min.
+build --cxxopt=-std=c++17
+
+# Each test target runs in its own network env; opt-out per target with
+# tags=["requires-network"].
+build --sandbox_default_allow_network=false
+
+# Hermetic-ish action env.
+common --action_env=PYTHONNOUSERSITE=1
+common --incompatible_strict_action_env
+
+build --heap_dump_on_oom
+build --noexperimental_check_output_files
+
+test --build_tests_only
+test --test_output=errors
+build --verbose_failures
+
+
+# Required for rules_foreign_cc CMake toolchain resolution.
+build --incompatible_enable_cc_toolchain_resolution
+
+# Clang config: bazel build --config=clang ...
+build:clang --repo_env=CC=clang
+build:clang --repo_env=CXX=clang++
+build:clang --linkopt="-fuse-ld=lld"
+
+try-import %workspace%/user.bazelrc

@@ -1,0 +1,4 @@
+# Marks third_party/rmf/ as a Bazel package so *.BUILD.bazel files in here can
+# be referenced as build_file = "//third_party/rmf:foo.BUILD.bazel" by external
+# http_archive declarations in extensions/non_module_deps.bzl.
+exports_files(glob(["*.BUILD.bazel"]))

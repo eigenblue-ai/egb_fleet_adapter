@@ -1,0 +1,23 @@
+"""BUILD file for @pluginlib (ros/pluginlib 5.5.0).
+
+Header-only INTERFACE library. Consumers (rmf_fleet_adapter plugins,
+egb_fleet_adapter plugins) get class_loader::ClassLoader-based runtime
+plugin discovery via #include <pluginlib/class_loader.hpp> +
+PLUGINLIB_EXPORT_CLASS(...) macro.
+"""
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "pluginlib",
+    hdrs = glob(["pluginlib/include/pluginlib/**/*.hpp"]),
+    includes = ["pluginlib/include"],
+    deps = [
+        "@ros2_class_loader//:class_loader",
+        "@tinyxml2",
+        # ament_index_cpp + rcutils + rcpputils are pulled transitively via
+        # @ros2_class_loader (rules_ros2 wires them up).
+    ],
+)

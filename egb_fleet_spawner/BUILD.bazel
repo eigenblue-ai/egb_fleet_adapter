@@ -1,0 +1,73 @@
+"""egb_fleet_spawner — bazelized fleet spawner.
+
+Two binaries:
+  fleet_service_bridge  — C++ exe wrapping domain_bridge for cross-domain
+                          fleet service calls
+  egb_fleet_spawner     — Python entry-point that spawns fleet adapters
+"""
+
+load(
+    "@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl",
+    "ros2_cpp_binary",
+)
+load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
+load("@rules_python//python:defs.bzl", "py_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+ros2_cpp_binary(
+    name = "fleet_service_bridge",
+    srcs = ["src/fleet_service_bridge.cpp"],
+    # set_up_ament=True so the runtime AMENT_PREFIX_PATH is set; rosidl
+    # typesupport plugins for egb_fleet_msgs are looked up via ament_index.
+    set_up_ament = True,
+    deps = [
+        "//egb_fleet_msgs:cpp_egb_fleet_msgs",
+        "@domain_bridge//:domain_bridge_lib",
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_rclcpp//:rclcpp_components",
+    ],
+)
+
+ros2_py_binary(
+    # Target name :spawner avoids conflict with the egb_fleet_spawner/ subdir
+    # holding the .py source. Users invoke it as
+    #   bazel run //egb_fleet_spawner:spawner
+    name = "spawner",
+    srcs = ["egb_fleet_spawner/egb_fleet_spawner.py"],
+    main = "egb_fleet_spawner/egb_fleet_spawner.py",
+    # set_up_ament=True populates AMENT_PREFIX_PATH in runfiles so rclpy
+    # discovers the Bazel-built egb_fleet_msgs typesupport at startup.
+    set_up_ament = True,
+    deps = [
+        "//egb_fleet_msgs:py_egb_fleet_msgs",
+        "@egb_fleet_pip//pyyaml",
+        "@ros2_rclpy//:rclpy",
+    ],
+)
+
+filegroup(
+    name = "launch",
+    srcs = glob(["launch/*.py"]),
+)
+
+# Bazel-native equivalent of launch/fleet_spawner_with_bridge.launch.py.
+# Brings up all three processes from one command:
+#   FOREIGN_DOMAIN_ID=45 ROS_DOMAIN_ID=41 bazel run //egb_fleet_spawner:launch_all
+py_binary(
+    name = "launch_all",
+    srcs = ["launch_all.py"],
+    data = [
+        ":fleet_service_bridge",
+        ":spawner",
+        "//egb_fleet_adapter:configs",
+        "@domain_bridge//:domain_bridge_node",
+    ],
+    main = "launch_all.py",
+    # NOTE: fleet_adapter_node is intentionally NOT a build-time data dep —
+    # pulling it in trips a cbindgen aspect bug on zenoh-collections (BCR
+    # zenoh-c). launch_all.py resolves it at runtime from
+    # $BUILD_WORKSPACE_DIRECTORY/bazel-bin/egb_fleet_adapter/fleet_adapter_node
+    # (build it once with `bazel build //egb_fleet_adapter:fleet_adapter_node`).
+    deps = ["@rules_python//python/runfiles"],
+)

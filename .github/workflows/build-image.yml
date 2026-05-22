@@ -1,0 +1,97 @@
+name: build-image
+
+# Builds prod (Dockerfile) and dev (Dockerfile.dev) images, pushes to GHCR.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  prod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bazel cache
+        uses: bazel-contrib/setup-bazel@0.9.1
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+
+      - name: Build targets
+        run: |
+          bazel build \
+            //egb_fleet_spawner:launch_all \
+            //egb_fleet_adapter:fleet_adapter_node
+
+      # Dereference the symlink trees so docker can COPY real files.
+      - name: Stage artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp -RL bazel-bin/egb_fleet_spawner/launch_all dist/launch_all
+          tar -C bazel-bin/egb_fleet_spawner -chf - launch_all.runfiles \
+            | tar -xf - -C dist/
+          cp -RL bazel-bin/egb_fleet_adapter/fleet_adapter_node dist/fleet_adapter_node
+          tar -C bazel-bin/egb_fleet_adapter -chf - fleet_adapter_node.runfiles \
+            | tar -xf - -C dist/
+          # Drop the MANIFESTs. They pin absolute build paths.
+          rm -f dist/launch_all.runfiles/MANIFEST dist/fleet_adapter_node.runfiles/MANIFEST
+
+      - name: Lowercase image name
+        id: img
+        run: echo "name=${IMAGE,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.img.outputs.name }}:latest
+            ${{ steps.img.outputs.name }}:${{ github.sha }}
+
+  dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lowercase image name
+        id: img
+        run: echo "name=${IMAGE,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dev
+          push: true
+          tags: |
+            ${{ steps.img.outputs.name }}:dev
+            ${{ steps.img.outputs.name }}:dev-${{ github.sha }}

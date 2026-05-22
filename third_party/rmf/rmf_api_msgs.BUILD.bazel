@@ -1,0 +1,94 @@
+"""BUILD file for @rmf_api_msgs (open-rmf/rmf_api_msgs 0.6.0).
+
+INTERFACE C++ library. Each schema .json in schemas/ is embedded into a
+schemas/<name>.hpp via a genrule that mirrors the upstream CMake
+rmf_api_generate_schema_headers function (configure_file with @schema_text@
+substitution).
+
+The schema list below tracks the .json files in rmf_api_msgs/schemas/.
+"""
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Schema list mirrors rmf_api_msgs 0.3.1's schemas/*.json (Jazzy 240617 set).
+_SCHEMAS = [
+    "activity_discovery_request",
+    "activity_discovery_response",
+    "cancel_task_request",
+    "cancel_task_response",
+    "commission",
+    "dispatch_task_request",
+    "dispatch_task_response",
+    "error",
+    "fleet_log",
+    "fleet_log_request",
+    "fleet_log_response",
+    "fleet_log_update",
+    "fleet_state",
+    "fleet_state_update",
+    "interrupt_task_request",
+    "interrupt_task_response",
+    "kill_task_request",
+    "kill_task_response",
+    "location_2D",
+    "log_entry",
+    "resume_task_request",
+    "resume_task_response",
+    "rewind_task_request",
+    "rewind_task_response",
+    "robot_commission_request",
+    "robot_commission_response",
+    "robot_state",
+    "robot_task_request",
+    "robot_task_response",
+    "rtls_tag_state",
+    "simple_response",
+    "skip_phase_request",
+    "skip_phase_response",
+    "task_discovery_request",
+    "task_discovery_response",
+    "task_log",
+    "task_log_request",
+    "task_log_response",
+    "task_log_update",
+    "task_request",
+    "task_state",
+    "task_state_update",
+    "token_response",
+    "transformation_2D",
+    "undo_skip_phase_request",
+    "undo_skip_phase_response",
+]
+
+[
+    genrule(
+        name = "schema_" + name + "_hpp",
+        srcs = ["rmf_api_msgs/schemas/" + name + ".json"],
+        outs = ["include/rmf_api_msgs/schemas/" + name + ".hpp"],
+        cmd = (
+            "upper=$$(echo " + name + " | tr '[:lower:]' '[:upper:]') && " +
+            "{ echo '/* Generated from rmf_api_msgs/schemas/" + name + ".json */'; " +
+            "  echo \"#ifndef RMF_API_MSGS__SCHEMAS__$$upper\"; " +
+            "  echo \"#define RMF_API_MSGS__SCHEMAS__$$upper\"; " +
+            "  echo '#include <nlohmann/json.hpp>'; " +
+            "  echo 'namespace rmf_api_msgs { namespace schemas {'; " +
+            "  echo 'static const nlohmann::json " + name + " ='; " +
+            "  echo 'R\"raw_schema('; " +
+            "  cat $<; " +
+            "  echo ')raw_schema\"_json;'; " +
+            "  echo '}}'; " +
+            "  echo \"#endif // RMF_API_MSGS__SCHEMAS__$$upper\"; " +
+            "} > $@"
+        ),
+    )
+    for name in _SCHEMAS
+]
+
+cc_library(
+    name = "rmf_api_msgs",
+    hdrs = [":schema_" + name + "_hpp" for name in _SCHEMAS],
+    includes = ["include"],
+    deps = ["@nlohmann_json//:json"],
+)
