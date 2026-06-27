@@ -31,6 +31,8 @@ namespace egb_fleet {
  * RMF thread. The only safe place to call it is from the timer/update thread
  * which runs on the same executor as RMF, ensuring sequential access.
  */
+enum class NavFailure : uint8_t { None = 0, LocalPlanning = 1, GoalOnObstacle = 2 };
+
 struct NavigationSession {
 
   mutable std::mutex mutex;
@@ -38,6 +40,8 @@ struct NavigationSession {
   // --- Goal tracking ---
   std::optional<std::array<uint8_t, 16>> goal_id;
   std::atomic<bool> done{false};
+
+  std::atomic<NavFailure> failure_reason{NavFailure::None};
 
   // --- Callbacks ---
   std::function<void()> completion_callback;
@@ -66,6 +70,7 @@ struct NavigationSession {
 
   void invalidate() {
     done.store(true);
+    failure_reason.store(NavFailure::None);
     goal_id.reset();
     completion_callback = nullptr;
     failure_callback = nullptr;

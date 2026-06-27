@@ -5,6 +5,7 @@
 #include "egb_fleet/action/robot_action_context.hpp"
 #include "egb_fleet/action/robot_action_factory.hpp"
 #include "egb_fleet/navigation_interface.hpp"
+#include "egb_fleet/navigation_session.hpp"
 #include "egb_fleet/path_handle.hpp"
 #include "egb_fleet/utils/zenoh_helpers.hpp"
 #include <cstring>
@@ -504,6 +505,8 @@ bool RobotState::update(
     // Update battery SOC
     update_handle_->update_battery_soc(battery_soc);
 
+    check_deadlock_recovery(map_name, rmf_pose);
+
     RCLCPP_DEBUG(node_->get_logger(),
                  "[%s] Successfully updated position and battery to RMF",
                  name_.c_str());
@@ -515,6 +518,54 @@ bool RobotState::update(
                  e.what());
     return false;
   }
+}
+
+void RobotState::check_deadlock_recovery(const std::string &map_name,
+                                         const Eigen::Vector3d &rmf_pose) {
+  const auto now = node_->now();
+
+  if (holding_) {
+    if (hold_until_ && now >= *hold_until_) {
+      if (deadlock_interruption_)
+        deadlock_interruption_->resume({"goal_on_obstacle_cleared"});
+      deadlock_interruption_.reset();
+      holding_ = false;
+      hold_until_.reset();
+      blocked_since_.reset();
+      cooldown_until_ = now + rclcpp::Duration::from_seconds(15.0);
+    }
+    return;
+  }
+
+  auto path = std::dynamic_pointer_cast<PathHandle>(command_handle_);
+  auto session = path ? path->current_session() : nullptr;
+  const bool blocked = session && !session->done.load() &&
+                       session->failure_reason.load() != NavFailure::None;
+  if (!blocked) {
+    blocked_since_.reset();
+    return;
+  }
+  if (cooldown_until_ && now < *cooldown_until_)
+    return;
+  if (!blocked_since_) {
+    blocked_since_ = now;
+    return;
+  }
+  if ((now - *blocked_since_).seconds() < 8.0)
+    return;
+
+  auto handle = update_handle_;
+  const std::string map = map_name;
+  const Eigen::Vector3d pose = rmf_pose;
+  deadlock_interruption_ = handle->interrupt(
+      {"goal_on_obstacle"}, [handle, map, pose]() {
+        handle->unstable().declare_holding(map, pose, std::chrono::seconds(10));
+      });
+  holding_ = true;
+  hold_until_ = now + rclcpp::Duration::from_seconds(10.0);
+  RCLCPP_WARN(node_->get_logger(),
+              "[%s] goal-on-obstacle deadlock: interrupt + hold 10s",
+              name_.c_str());
 }
 
 } // namespace egb_fleet

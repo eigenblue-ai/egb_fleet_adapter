@@ -9,5 +9,7 @@ string message
 ---
 # Feedback - Real-time path execution progress
 # Minimal feedback for waypoint progress calculation
+uint8 FAILURE_GOAL_ON_OBSTACLE=2
 uint32 closest_pose_index             # Index of closest pose on interpolated path
 bool local_planning_failed            # Whether MPC planning failed
+uint8 failure_reason                  # 0 = none, FAILURE_* otherwise

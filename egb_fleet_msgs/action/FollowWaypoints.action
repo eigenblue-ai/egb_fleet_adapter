@@ -14,5 +14,7 @@ string message                   # Result message
 
 # FEEDBACK
 # Waypoint-level progress information
+uint8 FAILURE_GOAL_ON_OBSTACLE=2
 uint32 target_waypoint_index     # Index of current target waypoint
 float64 eta_seconds              # Estimated time to reach target waypoint
+uint8 failure_reason             # 0 = none, FAILURE_* otherwise

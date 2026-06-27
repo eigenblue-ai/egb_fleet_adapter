@@ -284,6 +284,8 @@ void NavigationController::feedback_callback(
     if (!expected_goal_id || feedback_msg.goal_id.uuid != *expected_goal_id) {
       return;
     }
+    session->failure_reason.store(
+        static_cast<NavFailure>(feedback_msg.feedback.failure_reason));
     if (cb) {
       cb(static_cast<size_t>(target_waypoint_idx), eta_seconds);
     }

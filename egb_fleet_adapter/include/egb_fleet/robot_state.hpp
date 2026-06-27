@@ -135,6 +135,15 @@ private:
 
   // Battery state callback
   void battery_state_callback(const std::vector<uint8_t> &payload);
+
+  std::optional<rmf_fleet_adapter::agv::RobotUpdateHandle::Interruption>
+      deadlock_interruption_;
+  std::optional<rclcpp::Time> blocked_since_;
+  std::optional<rclcpp::Time> hold_until_;
+  std::optional<rclcpp::Time> cooldown_until_;
+  bool holding_ = false;
+  void check_deadlock_recovery(const std::string &map_name,
+                               const Eigen::Vector3d &rmf_pose);
 };
 
 } // namespace egb_fleet
