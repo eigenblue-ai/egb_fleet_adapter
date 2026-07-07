@@ -21,6 +21,8 @@ COPY dist/fleet_adapter_node          /opt/egb_fleet/fleet_adapter_node
 COPY dist/fleet_adapter_node.runfiles /opt/egb_fleet/fleet_adapter_node.runfiles
 RUN chmod +x /opt/egb_fleet/launch_all /opt/egb_fleet/fleet_adapter_node
 
+RUN d="$(ls -d /opt/egb_fleet/launch_all.runfiles/rules_python*python_3_12* | head -1)" && ln -sfn "$d" /install
+
 ENV EGB_FLEET_ADAPTER_NODE=/opt/egb_fleet/fleet_adapter_node \
     RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 

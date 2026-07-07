@@ -20,7 +20,10 @@ ros2_interface_library(
         "rmf_building_map_msgs/msg/*.msg",
         "rmf_building_map_msgs/srv/*.srv",
     ]),
-    deps = ["@ros2_common_interfaces//:geometry_msgs"],
+    deps = [
+        "@ros2_common_interfaces//:geometry_msgs",
+        "@ros2_rcl_interfaces//:service_msgs",  # jazzy: services need service_msgs
+    ],
 )
 
 cpp_ros2_interface_library(

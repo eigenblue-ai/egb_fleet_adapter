@@ -18,6 +18,10 @@ build --sandbox_default_allow_network=false
 common --action_env=PYTHONNOUSERSITE=1
 common --incompatible_strict_action_env
 
+# the vendored RMF BUILD files use bazel 7 globs where empty is fine. bazel 8 turns
+# empty globs into errors, so turn that back off.
+common --incompatible_disallow_empty_glob=false
+
 build --heap_dump_on_oom
 build --noexperimental_check_output_files
 

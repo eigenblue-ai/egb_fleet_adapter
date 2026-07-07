@@ -6,12 +6,12 @@ module(
 # ---------------------------------------------------------------------------
 # Core build/runtime rules.
 # ---------------------------------------------------------------------------
-bazel_dep(name = "rules_cc", version = "0.1.1")
-bazel_dep(name = "rules_python", version = "1.1.0")
+bazel_dep(name = "rules_cc", version = "0.2.16")
+bazel_dep(name = "rules_python", version = "2.0.2")
 bazel_dep(name = "rules_rust", version = "0.70.0")  # zenoh-c BCR 1.7.2 needs >=0.68
-bazel_dep(name = "rules_foreign_cc", version = "0.13.0")
-bazel_dep(name = "rules_shell", version = "0.3.0")
-bazel_dep(name = "platforms", version = "0.0.10")
+bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+bazel_dep(name = "platforms", version = "1.1.0")
 
 # Shared C++ libs (used by RMF / domain_bridge / fleet adapter).
 bazel_dep(name = "yaml-cpp", version = "0.8.0")
@@ -24,13 +24,26 @@ bazel_dep(name = "curl", version = "8.4.0.bcr.1")
 # Eigen (header-only); target @eigen//:eigen.
 bazel_dep(name = "eigen", version = "3.4.0.bcr.3")
 
-# Boost subset needed by rmf_websocket. Pin 1.83 because (a) boost.asio
-# 1.87+ removed `expires_from_now()` which websocketpp 0.8.2 still calls,
-# and (b) boost 1.88+ MODULE.bazel uses repo_name=None which Bazel 7.5
-# does not accept. 1.83 is the latest pre-deprecation that resolves cleanly.
+# websocketpp 0.8.2 needs the pre-1.87 boost API (io_service, expires_from_now).
+# its BCR module pulls boost.asio 1.89 on bazel 8, so force the subset back to 1.83.
 bazel_dep(name = "boost.asio", version = "1.83.0.bcr.1")
 bazel_dep(name = "boost.circular_buffer", version = "1.83.0.bcr.1")
 bazel_dep(name = "boost.system", version = "1.83.0.bcr.1")
+
+single_version_override(
+    module_name = "boost.asio",
+    version = "1.83.0.bcr.1",
+)
+
+single_version_override(
+    module_name = "boost.circular_buffer",
+    version = "1.83.0.bcr.1",
+)
+
+single_version_override(
+    module_name = "boost.system",
+    version = "1.83.0.bcr.1",
+)
 
 # zlib (rmf_traffic_ros2 schedule serializer).
 bazel_dep(name = "zlib", version = "1.3.1.bcr.3")
@@ -90,22 +103,23 @@ bazel_dep(name = "com_github_mvukov_rules_ros2")
 archive_override(
     module_name = "com_github_mvukov_rules_ros2",
     patches = ["//extensions:rules_ros2_srv_support.patch"],
-    strip_prefix = "rules_ros2-4710585558693b62bdab089ca3d0f050b765c819",
-    urls = ["https://github.com/mvukov/rules_ros2/archive/4710585558693b62bdab089ca3d0f050b765c819.tar.gz"],
+    # jazzy branch (PR #558), unmerged
+    strip_prefix = "rules_ros2-56ad1dfa6a636378e623dd5903c4ff4d7d2acd4b",
+    urls = ["https://github.com/mvukov/rules_ros2/archive/56ad1dfa6a636378e623dd5903c4ff4d7d2acd4b.tar.gz"],
 )
 
-# Python toolchain — must match rules_ros2_pip_deps_numpy_headers (3.10).
+# Python toolchain, must match rules_ros2_pip_deps_numpy_headers (3.12).
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
     is_default = True,
-    python_version = "3.10",
+    python_version = "3.12",
 )
 
 # Pip deps for the Python spawner (PyYAML for fleet_config_template.yaml parsing).
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
     hub_name = "egb_fleet_pip",
-    python_version = "3.10",
+    python_version = "3.12",
     requirements_lock = "//third_party:requirements.txt",
 )
 use_repo(pip, "egb_fleet_pip")

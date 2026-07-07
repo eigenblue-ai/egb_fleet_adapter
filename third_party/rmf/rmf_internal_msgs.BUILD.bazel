@@ -31,6 +31,9 @@ STD = "@ros2_common_interfaces//:std_msgs"
 
 ACTION = "@ros2_rcl_interfaces//:action_msgs"
 
+# jazzy services need service_msgs (ServiceEventInfo) for type-description gen
+SERVICE = "@ros2_rcl_interfaces//:service_msgs"
+
 # -- Leaf packages (no inter-rmf_internal_msgs deps) ------------------------
 
 ros2_interface_library(
@@ -60,7 +63,10 @@ ros2_interface_library(
         "rmf_fleet_msgs/msg/*.msg",
         "rmf_fleet_msgs/srv/*.srv",
     ]),
-    deps = [BUILTIN],
+    deps = [
+        BUILTIN,
+        SERVICE,
+    ],
 )
 
 ros2_interface_library(
@@ -85,7 +91,10 @@ ros2_interface_library(
         "rmf_scheduler_msgs/msg/*.msg",
         "rmf_scheduler_msgs/srv/*.srv",
     ]),
-    deps = [BUILTIN],
+    deps = [
+        BUILTIN,
+        SERVICE,
+    ],
 )
 
 ros2_interface_library(
@@ -97,6 +106,7 @@ ros2_interface_library(
     deps = [
         BUILTIN,
         GEOMETRY,
+        SERVICE,
     ],
 )
 
@@ -135,6 +145,7 @@ ros2_interface_library(
         ":rmf_dispenser_msgs",
         ACTION,
         BUILTIN,
+        SERVICE,
     ],
 )
 

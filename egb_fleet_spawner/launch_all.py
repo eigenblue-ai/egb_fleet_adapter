@@ -37,8 +37,9 @@ def main() -> int:
     r = Runfiles.Create()
     spawner = r.Rlocation("_main/egb_fleet_spawner/spawner")
     service_bridge = r.Rlocation("_main/egb_fleet_spawner/fleet_service_bridge")
+    # bazel 8 canonical repo names use + not ~
     domain_bridge_node = r.Rlocation(
-        "_main~non_module_deps~domain_bridge/domain_bridge_node"
+        "+non_module_deps+domain_bridge/domain_bridge_node"
     )
     # Deployment override seam, mirrors the EGB_FLEET_ADAPTER_NODE pattern below.
     template_cfg = os.environ.get("EGB_FLEET_CONFIG") or r.Rlocation(
