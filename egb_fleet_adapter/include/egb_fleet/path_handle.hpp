@@ -91,10 +91,16 @@ private:
   // Apply coordinate transformation to a 2D position
   Eigen::Vector2d transform_position(const Eigen::Vector2d &rmf_position) const;
 
+  // Heading to hold at a lone target waypoint, taken from the graph lane the
+  // robot arrives on (the lane ending here that the robot is nearest to).
+  std::optional<double>
+  approach_yaw_for(const rmf_traffic::agv::Plan::Waypoint &waypoint) const;
+
   // Convert a single waypoint directly to waypoints (with coordinate transform)
   egb_fleet_msgs::msg::Waypoint
   waypoint_to_msg(const rmf_traffic::agv::Plan::Waypoint &waypoint,
-                  size_t waypoint_index, size_t total_waypoints) const;
+                  size_t waypoint_index, size_t total_waypoints,
+                  std::optional<double> yaw_override = std::nullopt) const;
 
   // Find the best approach lane to a dock
   std::optional<size_t>

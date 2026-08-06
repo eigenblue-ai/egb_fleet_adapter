@@ -7,9 +7,11 @@
 #include "egb_fleet/navigation_interface.hpp"
 #include "egb_fleet/navigation_session.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <egb_fleet_msgs/msg/lane.hpp>
 #include <egb_fleet_msgs/msg/waypoint.hpp>
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <rmf_traffic/Time.hpp>
 #include <tf2/LinearMath/Quaternion.h>
@@ -49,6 +51,18 @@ private:
   std::string dock_name_;
 };
 
+// Distance from p to the segment ab.
+double distance_to_lane(const Eigen::Vector2d &p, const Eigen::Vector2d &a,
+                        const Eigen::Vector2d &b) {
+  const Eigen::Vector2d ab = b - a;
+  const double len_sq = ab.squaredNorm();
+  if (len_sq < 1e-12)
+    return (p - a).norm();
+  double t = (p - a).dot(ab) / len_sq;
+  t = std::max(0.0, std::min(1.0, t));
+  return (p - (a + t * ab)).norm();
+}
+
 } // anonymous namespace
 
 PathHandle::PathHandle(
@@ -80,10 +94,49 @@ PathHandle::transform_position(const Eigen::Vector2d &rmf_position) const {
   return robot_pose_3d.head<2>();
 }
 
+std::optional<double> PathHandle::approach_yaw_for(
+    const rmf_traffic::agv::Plan::Waypoint &waypoint) const {
+  const auto idx = waypoint.graph_index();
+  if (!idx || !graph_)
+    return std::nullopt;
+
+  Eigen::Vector2d robot;
+  {
+    std::lock_guard<std::mutex> lock(position_mutex_);
+    robot = current_position_.head<2>();
+  }
+
+  const Eigen::Vector2d exit = graph_->get_waypoint(*idx).get_location();
+
+  // Several lanes can end at this waypoint. The robot came in on the one it
+  // is nearest to.
+  std::optional<double> yaw;
+  double nearest = std::numeric_limits<double>::max();
+  for (std::size_t i = 0; i < graph_->num_lanes(); ++i) {
+    const auto &lane = graph_->get_lane(i);
+    if (lane.exit().waypoint_index() != *idx)
+      continue;
+
+    const Eigen::Vector2d entry =
+        graph_->get_waypoint(lane.entry().waypoint_index()).get_location();
+    const Eigen::Vector2d direction = exit - entry;
+    if (direction.norm() < 1e-6)
+      continue;
+
+    const double d = distance_to_lane(robot, entry, exit);
+    if (d < nearest) {
+      nearest = d;
+      yaw = std::atan2(direction.y(), direction.x());
+    }
+  }
+
+  return yaw;
+}
+
 egb_fleet_msgs::msg::Waypoint
 PathHandle::waypoint_to_msg(const rmf_traffic::agv::Plan::Waypoint &waypoint,
-                            size_t waypoint_index,
-                            size_t total_waypoints) const {
+                            size_t waypoint_index, size_t total_waypoints,
+                            std::optional<double> yaw_override) const {
   egb_fleet_msgs::msg::Waypoint wp_msg;
   wp_msg.id = "wp_" + std::to_string(waypoint_index);
   wp_msg.sequence_id = static_cast<uint32_t>(waypoint_index);
@@ -96,7 +149,7 @@ PathHandle::waypoint_to_msg(const rmf_traffic::agv::Plan::Waypoint &waypoint,
   wp_msg.pose.position.y = robot_position.y();
   wp_msg.pose.position.z = 0.0;
 
-  double theta = waypoint_pos_3d[2];
+  double theta = yaw_override ? *yaw_override : waypoint_pos_3d[2];
   wp_msg.pose.orientation.x = 0.0;
   wp_msg.pose.orientation.y = 0.0;
   wp_msg.pose.orientation.z = std::sin(theta / 2.0);
@@ -191,11 +244,32 @@ void PathHandle::follow_new_path(
   RCLCPP_INFO(node_->get_logger(), "[%s] Following path with %zu waypoints",
               robot_name_.c_str(), waypoints.size());
 
+  // A replan that collapses to one waypoint (robot already at its target) has
+  // no travel direction left, and the yaw RMF fills in makes the target
+  // heading jump. Take it from the arrival lane instead.
+  std::optional<double> yaw_override;
+  if (waypoints.size() == 1) {
+    yaw_override = approach_yaw_for(waypoints.front());
+    if (yaw_override) {
+      RCLCPP_INFO(node_->get_logger(),
+                  "[%s] Single-waypoint replan: holding approach heading %.3f "
+                  "rad (plan said %.3f)",
+                  robot_name_.c_str(), *yaw_override,
+                  waypoints.front().position()[2]);
+    } else {
+      RCLCPP_WARN(node_->get_logger(),
+                  "[%s] Single-waypoint replan: no lane ends at this waypoint, "
+                  "using the plan's %.3f rad",
+                  robot_name_.c_str(), waypoints.front().position()[2]);
+    }
+  }
+
   // Convert waypoints to the internal format
   std::vector<egb_fleet_msgs::msg::Waypoint> wp_msgs;
   wp_msgs.reserve(waypoints.size());
   for (size_t i = 0; i < waypoints.size(); ++i) {
-    wp_msgs.push_back(waypoint_to_msg(waypoints[i], i, waypoints.size()));
+    wp_msgs.push_back(
+        waypoint_to_msg(waypoints[i], i, waypoints.size(), yaw_override));
   }
 
   // Create a new session. The old session is invalidated below under its
