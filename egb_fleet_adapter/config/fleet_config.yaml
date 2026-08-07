@@ -68,9 +68,10 @@ rmf_fleet:
   robot_state_update_frequency: 20.0 # Hz
 
 # PLUGIN CONFIG ================================================================
+# These categories are what the adapter registers with RMF, so a plugin left
+# out here is never dispatched to. Out-of-repo plugins go here too, as long as
+# their ament prefix is on AMENT_PREFIX_PATH.
 plugins:
-  egb_fleet::plugins::LiftDropActionFactory:
-    actions: ["pickup", "dropoff"]
   egb_fleet::plugins::UndockActionFactory:
     actions: ["undock"]
 

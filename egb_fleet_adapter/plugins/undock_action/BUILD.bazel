@@ -9,6 +9,8 @@ cc_library(
     includes = ["include"],
 )
 
+# Depends on :action_api rather than the whole adapter, same as an out-of-tree
+# plugin would. If this stops building, the ABI has grown a hole.
 ros2_plugin(
     name = "undock_action_plugin",
     srcs = ["src/undock_action.cpp"],
@@ -20,9 +22,9 @@ ros2_plugin(
     ],
     deps = [
         ":hdrs",
-        "//egb_fleet_adapter",
+        "//egb_fleet_adapter:action_api",
         "@pluginlib",
-        "@rmf_ros2//:rmf_fleet_adapter",
-        "@ros2_rclcpp//:rclcpp",
+        "@ros2_geometry2//:cpp_tf2_geometry_msgs",
+        "@ros2_geometry2//:tf2",
     ],
 )

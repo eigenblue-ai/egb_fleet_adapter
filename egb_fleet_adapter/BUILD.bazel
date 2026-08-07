@@ -1,11 +1,14 @@
 """egb_fleet_adapter — bazelized fleet adapter.
 
-Library + main binary + 3 pluginlib plugins:
-  fleet_adapter_node              — main exe
-  egb_fleet_adapter               — cc_library with 14 source files
-  charging_action_plugin.so       — pluginlib plugin
-  lift_drop_actions_plugin.so     — pluginlib plugin
-  undock_action_plugin.so         — pluginlib plugin
+Navigation only. Everything else is a pluginlib plugin, and plugins can live
+outside this repo: they derive from egb_fleet::action::RobotActionFactory, and
+rules_ros2 registers a plugin under the base class's package, not its own.
+Enable one by listing it in the fleet config's `plugins:` block.
+
+  action_api                      the plugin ABI, all an out-of-tree plugin needs
+  egb_fleet_adapter               the adapter itself
+  fleet_adapter_node              main exe
+  undock_action_plugin.so         in-tree plugin, also the ABI reference
 """
 
 load(
@@ -16,42 +19,65 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
-_COMMON_DEPS = [
-    "//egb_fleet_msgs:cpp_egb_fleet_msgs",
+# Everything an out-of-tree plugin needs to compile against action_api.
+_ACTION_API_DEPS = [
     "@zenoh-cpp//:zenoh-cpp",
-    "@boost.asio//:boost.asio",
-    "@curl//:curl",
     "@eigen//:eigen",
     "@nlohmann_json//:json",
     "@pluginlib//:pluginlib",
-    "@rmf_battery//:rmf_battery",
-    "@rmf_internal_msgs//:cpp_rmf_fleet_msgs",
-    "@rmf_internal_msgs//:cpp_rmf_task_msgs",
     "@rmf_ros2//:rmf_fleet_adapter",
-    "@rmf_ros2//:rmf_traffic_ros2",
-    "@rmf_task//:rmf_task",
     "@rmf_traffic//:rmf_traffic",
     "@rmf_utils//:rmf_utils",
     "@ros2_common_interfaces//:cpp_geometry_msgs",
+    "@ros2_rcl_interfaces//:cpp_action_msgs",
+    "@ros2_rclcpp//:rclcpp",
+    "@yaml-cpp//:yaml-cpp",
+]
+
+_COMMON_DEPS = _ACTION_API_DEPS + [
+    "//egb_fleet_msgs:cpp_egb_fleet_msgs",
+    "@boost.asio//:boost.asio",
+    "@curl//:curl",
+    "@rmf_battery//:rmf_battery",
+    "@rmf_internal_msgs//:cpp_rmf_fleet_msgs",
+    "@rmf_internal_msgs//:cpp_rmf_task_msgs",
+    "@rmf_ros2//:rmf_traffic_ros2",
+    "@rmf_task//:rmf_task",
     "@ros2_common_interfaces//:cpp_sensor_msgs",
     "@ros2_common_interfaces//:cpp_std_msgs",
     "@ros2_geometry2//:tf2_eigen",
     "@ros2_geometry2//:tf2_ros",
     "@ros2_geometry2//:cpp_tf2_geometry_msgs",
-    "@ros2_rcl_interfaces//:cpp_action_msgs",
     "@ros2_rcl_interfaces//:cpp_builtin_interfaces",
-    "@ros2_rclcpp//:rclcpp",
     "@ros2_rclcpp//:rclcpp_action",
     "@ros2_rclcpp//:rclcpp_components",
-    "@yaml-cpp//:yaml-cpp",
 ]
 
+_ACTION_API_HDRS = [
+    "include/egb_fleet/action/robot_action.hpp",
+    "include/egb_fleet/action/robot_action_context.hpp",
+    "include/egb_fleet/action/robot_action_factory.hpp",
+    "include/egb_fleet/utils/zenoh_action_client.hpp",
+]
+
+# No egb_fleet_msgs on purpose. A plugin brings its own action IDL and drives
+# it through zenoh_action_client, so adding an action does not touch this repo.
 cc_library(
-    name = "egb_fleet_adapter",
+    name = "action_api",
     srcs = [
         "src/action/robot_action.cpp",
         "src/action/robot_action_context.cpp",
         "src/action/robot_action_factory.cpp",
+        "src/utils/zenoh_action_client.cpp",
+    ],
+    hdrs = _ACTION_API_HDRS,
+    includes = ["include"],
+    deps = _ACTION_API_DEPS,
+)
+
+cc_library(
+    name = "egb_fleet_adapter",
+    srcs = [
         "src/fleet_adapter.cpp",
         "src/navigation_controller.cpp",
         "src/navigation_interface_factory.cpp",
@@ -64,36 +90,27 @@ cc_library(
         "src/utils/logging.cpp",
         "src/utils/zenoh_helpers.cpp",
     ],
-    hdrs = glob(["include/egb_fleet/**/*.hpp"]),
+    hdrs = glob(
+        ["include/egb_fleet/**/*.hpp"],
+        exclude = _ACTION_API_HDRS,
+    ),
     includes = ["include"],
-    deps = _COMMON_DEPS,
+    deps = [":action_api"] + _COMMON_DEPS,
 )
 
 ros2_cpp_binary(
     name = "fleet_adapter_node",
     srcs = ["src/fleet_adapter_main.cpp"],
     data = [
-        "//egb_fleet_adapter/plugins/charging_action:charging_action_plugin",
-        "//egb_fleet_adapter/plugins/lift_drop_actions:lift_drop_actions_plugin",
         "//egb_fleet_adapter/plugins/undock_action:undock_action_plugin",
     ],
-    # set_up_ament=True wraps the binary in a sh launcher that sets
-    # AMENT_PREFIX_PATH so pluginlib::ClassLoader can discover the 3
-    # ros2_plugin targets in the runfiles tree.
-    # data attr is traversed by the ros2_plugin_collector aspect — that's
-    # how the plugin .so + plugin_description.xml end up registered in
-    # ament_index.
+    # set_up_ament wraps the binary in a launcher that sets AMENT_PREFIX_PATH
+    # so pluginlib::ClassLoader finds the plugins listed in data, which the
+    # ros2_plugin_collector aspect registers in ament_index.
+    # Out-of-tree plugins ship their own prefix instead, appended at deploy.
     set_up_ament = True,
     deps = [":egb_fleet_adapter"] + _COMMON_DEPS,
 )
-
-# --- pluginlib plugins live in their own subdir BUILD.bazel files ---------
-# See plugins/{charging_action,lift_drop_actions,undock_action}/BUILD.bazel.
-
-# Re-export COMMON deps so plugin BUILDs can `load(":BUILD.bazel", "_COMMON_DEPS")`.
-# (Bazel doesn't actually allow that; plugin BUILDs each declare their own deps,
-# but they all dep back on //egb_fleet_adapter:egb_fleet_adapter which
-# brings the transitive closure.)
 
 # Static resources packaged as filegroups for runfiles.
 filegroup(
@@ -104,9 +121,4 @@ filegroup(
 filegroup(
     name = "launch",
     srcs = glob(["launch/*.py"]),
-)
-
-filegroup(
-    name = "plugin_description",
-    srcs = ["plugins/plugin_description.xml"],
 )

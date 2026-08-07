@@ -21,6 +21,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <unordered_set>
 
@@ -173,6 +174,32 @@ void FleetAdapter::start() {
   update_loop();
 }
 
+std::vector<std::string> FleetAdapter::performable_plugin_actions() const {
+  std::vector<std::string> categories;
+
+  auto plugins = config_["plugins"];
+  if (!plugins) {
+    return categories;
+  }
+
+  for (const auto &plugin : plugins) {
+    auto actions = plugin.second["actions"];
+    if (!actions) {
+      continue;
+    }
+    for (const auto &action : actions) {
+      auto category = action.as<std::string>();
+      // Two plugins may claim the same category, RMF wants one registration.
+      if (std::find(categories.begin(), categories.end(), category) ==
+          categories.end()) {
+        categories.push_back(std::move(category));
+      }
+    }
+  }
+
+  return categories;
+}
+
 void FleetAdapter::initialize_fleet() {
   auto node = adapter_->node();
 
@@ -282,44 +309,25 @@ void FleetAdapter::initialize_fleet() {
   RCLCPP_INFO(node->get_logger(),
               "Registered 'go_to_place' as performable action");
 
-  fleet_handle_->add_performable_action(
-      "undock", [node](const nlohmann::json &description,
-                       rmf_fleet_adapter::agv::FleetUpdateHandle::Confirmation
-                           &confirmation) {
-        (void)description;
-        RCLCPP_INFO(node->get_logger(),
-                    "Undock action requested - confirming acceptance");
-        // Accept all undock actions
-        confirmation.accept();
-      });
+  // The dispatchable categories are whatever the configured plugins claim.
+  // Same `plugins:` block RobotState parses into its category -> plugin map.
+  for (const auto &category : performable_plugin_actions()) {
+    fleet_handle_->add_performable_action(
+        category,
+        [node, category](
+            const nlohmann::json &description,
+            rmf_fleet_adapter::agv::FleetUpdateHandle::Confirmation
+                &confirmation) {
+          (void)description;
+          RCLCPP_INFO(node->get_logger(),
+                      "Action '%s' requested - confirming acceptance",
+                      category.c_str());
+          confirmation.accept();
+        });
 
-  RCLCPP_INFO(node->get_logger(), "Registered 'undock' as performable action");
-
-  fleet_handle_->add_performable_action(
-      "pickup", [node](const nlohmann::json &description,
-                       rmf_fleet_adapter::agv::FleetUpdateHandle::Confirmation
-                           &confirmation) {
-        (void)description;
-        RCLCPP_INFO(node->get_logger(),
-                    "Pickup action requested - confirming acceptance");
-        // Accept all pickup actions
-        confirmation.accept();
-      });
-
-  RCLCPP_INFO(node->get_logger(), "Registered 'pickup' as performable action");
-
-  fleet_handle_->add_performable_action(
-      "dropoff", [node](const nlohmann::json &description,
-                        rmf_fleet_adapter::agv::FleetUpdateHandle::Confirmation
-                            &confirmation) {
-        (void)description;
-        RCLCPP_INFO(node->get_logger(),
-                    "Dropoff action requested - confirming acceptance");
-        // Accept all dropoff actions
-        confirmation.accept();
-      });
-
-  RCLCPP_INFO(node->get_logger(), "Registered 'dropoff' as performable action");
+    RCLCPP_INFO(node->get_logger(), "Registered '%s' as performable action",
+                category.c_str());
+  }
 
   // Configure battery system
   if (config_["rmf_fleet"]["battery_system"]) {

@@ -12,6 +12,7 @@
 #include <rmf_fleet_adapter/agv/Adapter.hpp>
 #include <rmf_fleet_adapter/agv/Transformation.hpp>
 #include <string>
+#include <vector>
 #include <yaml-cpp/yaml.h>
 
 // Forward declarations for tf2_ros
@@ -37,6 +38,9 @@ private:
   void update_loop();
   void initialize_static_robots();
   void initialize_discovery();
+
+  /// Action categories claimed by the configured plugins, deduplicated.
+  std::vector<std::string> performable_plugin_actions() const;
 
   YAML::Node config_;
   std::string nav_graph_id_;
