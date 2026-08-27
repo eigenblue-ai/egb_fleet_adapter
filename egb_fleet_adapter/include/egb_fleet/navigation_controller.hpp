@@ -57,7 +57,9 @@ private:
       const std::vector<egb_fleet_msgs::msg::Lane> &lanes,
       const std::string &order_id);
 
-  std::vector<egb_fleet_msgs::msg::Lane> generate_lanes(size_t waypoint_count);
+  std::vector<egb_fleet_msgs::msg::Lane>
+  generate_lanes(size_t waypoint_count,
+                 const std::vector<double> &speed_limits);
   void setup_zenoh_subscribers();
   void feedback_callback(const std::vector<uint8_t> &payload);
   void status_callback(const std::vector<uint8_t> &payload);

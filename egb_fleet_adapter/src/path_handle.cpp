@@ -280,6 +280,15 @@ void PathHandle::follow_new_path(
   for (const auto &wp : waypoints) {
     new_session->waypoint_approach_lanes.push_back(wp.approach_lanes());
     new_session->waypoint_graph_indices.push_back(wp.graph_index());
+    // The slowest arriving lane: which one the robot takes is not settled yet.
+    double limit = 0.0;
+    for (const std::size_t lane_idx : wp.approach_lanes()) {
+      const auto lane_limit =
+          graph_->get_lane(lane_idx).properties().speed_limit();
+      if (lane_limit)
+        limit = limit > 0.0 ? std::min(limit, *lane_limit) : *lane_limit;
+    }
+    new_session->waypoint_speed_limits.push_back(limit);
   }
 
   // CRITICAL: Invalidate the old session FIRST, before doing anything else.
@@ -300,10 +309,27 @@ void PathHandle::follow_new_path(
     }
   }
 
+  // A new path supersedes a failure RMF has not consumed yet.
+  pending_failure_.store(false);
+
   // Store the RMF arrival estimator in the session. It is ONLY called from
   // the timer/update thread (same executor as RMF), never from Zenoh threads.
   // The Zenoh feedback thread just buffers the data in pending_feedback.
   new_session->rmf_arrival_estimator = next_arrival_estimator;
+
+  // Like arrival: buffered here, replanned by the update thread.
+  std::weak_ptr<NavigationSession> failure_wp = new_session;
+  new_session->failure_callback = [this, failure_wp]() {
+    if (auto s = failure_wp.lock()) {
+      std::lock_guard<std::mutex> lock(s->mutex);
+      s->invalidate();
+    }
+    {
+      std::lock_guard<std::mutex> lock(session_mutex_);
+      session_.reset();
+    }
+    pending_failure_.store(true);
+  };
 
   // The wrapped_estimator is called by NavigationController::feedback_callback
   // on the Zenoh thread. It must NOT call rmf_arrival_estimator — just buffer.
@@ -383,6 +409,8 @@ void PathHandle::stop() {
     std::lock_guard<std::mutex> lock(session_mutex_);
     session_.reset();
   }
+  // A stop supersedes an unconsumed failure.
+  pending_failure_.store(false);
 }
 
 void PathHandle::dock(const std::string &dock_name,

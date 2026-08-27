@@ -53,17 +53,18 @@ void NavigationController::execute_path(
       "[NavigationController] Executing path with %zu waypoints for robot: %s",
       waypoints.size(), robot_name_.c_str());
 
-  std::vector<egb_fleet_msgs::msg::Lane> lanes =
-      generate_lanes(waypoints.size());
-  auto goal_id = utils::generate_goal_id();
-  std::string order_id = "order_" + std::to_string(node_->now().nanoseconds());
-
-  // Store callbacks and goal in the current session
+  // Ahead of the lanes: they carry the limits the session resolved.
   std::shared_ptr<NavigationSession> session;
   {
     std::lock_guard<std::mutex> lock(session_wp_mutex_);
     session = session_wp_.lock();
   }
+
+  std::vector<egb_fleet_msgs::msg::Lane> lanes =
+      generate_lanes(waypoints.size(), session ? session->waypoint_speed_limits
+                                               : std::vector<double>{});
+  auto goal_id = utils::generate_goal_id();
+  std::string order_id = "order_" + std::to_string(node_->now().nanoseconds());
 
   if (!session) {
     RCLCPP_ERROR(node_->get_logger(),
@@ -152,13 +153,17 @@ NavigationController::get_current_goal_id() const {
 }
 
 std::vector<egb_fleet_msgs::msg::Lane>
-NavigationController::generate_lanes(size_t waypoint_count) {
+NavigationController::generate_lanes(size_t waypoint_count,
+                                     const std::vector<double> &speed_limits) {
   std::vector<egb_fleet_msgs::msg::Lane> lanes;
   for (size_t i = 0; i + 1 < waypoint_count; ++i) {
     egb_fleet_msgs::msg::Lane lane;
     lane.id = "lane_" + std::to_string(i);
     lane.entry = "wp_" + std::to_string(i);
     lane.exit = "wp_" + std::to_string(i + 1);
+    // Held against the arriving waypoint, so this lane takes its exit's.
+    if (i + 1 < speed_limits.size())
+      lane.speed_limit = static_cast<float>(speed_limits[i + 1]);
     lanes.push_back(lane);
   }
   return lanes;

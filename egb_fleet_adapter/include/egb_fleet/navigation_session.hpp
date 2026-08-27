@@ -31,7 +31,11 @@ namespace egb_fleet {
  * RMF thread. The only safe place to call it is from the timer/update thread
  * which runs on the same executor as RMF, ensuring sequential access.
  */
-enum class NavFailure : uint8_t { None = 0, LocalPlanning = 1, GoalOnObstacle = 2 };
+enum class NavFailure : uint8_t {
+  None = 0,
+  LocalPlanning = 1,
+  GoalOnObstacle = 2
+};
 
 struct NavigationSession {
 
@@ -66,6 +70,8 @@ struct NavigationSession {
   // --- Lane context ---
   std::vector<std::vector<std::size_t>> waypoint_approach_lanes;
   std::vector<std::optional<std::size_t>> waypoint_graph_indices;
+  // Limit for the leg arriving at each waypoint, so entry 0 is unused.
+  std::vector<double> waypoint_speed_limits;
   std::atomic<std::size_t> current_target_index{0};
 
   void invalidate() {

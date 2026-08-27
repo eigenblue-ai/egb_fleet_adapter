@@ -431,7 +431,7 @@ bool RobotState::update(
       return false;
     }
 
-    // Nav-graph localization merge radii (RMF defaults the waypoint one to 0.1m).
+    // Nav-graph merge radii. RMF defaults the waypoint one to 0.1m.
     const double max_merge_waypoint_distance = 1.0;
     const double max_merge_lane_distance = 1.0;
 
@@ -490,6 +490,12 @@ bool RobotState::update(
               std::dynamic_pointer_cast<PathHandle>(command_handle_)) {
         path_handle->update_position(rmf_pose, lanes);
         path_handle->drain_pending_feedback();
+        if (path_handle->take_pending_failure()) {
+          RCLCPP_WARN(node_->get_logger(),
+                      "[%s] Navigation failed, requesting replan",
+                      name_.c_str());
+          update_handle_->replan();
+        }
       }
 
       RCLCPP_DEBUG(node_->get_logger(),
@@ -557,8 +563,8 @@ void RobotState::check_deadlock_recovery(const std::string &map_name,
   auto handle = update_handle_;
   const std::string map = map_name;
   const Eigen::Vector3d pose = rmf_pose;
-  deadlock_interruption_ = handle->interrupt(
-      {"goal_on_obstacle"}, [handle, map, pose]() {
+  deadlock_interruption_ =
+      handle->interrupt({"goal_on_obstacle"}, [handle, map, pose]() {
         handle->unstable().declare_holding(map, pose, std::chrono::seconds(10));
       });
   holding_ = true;

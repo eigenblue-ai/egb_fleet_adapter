@@ -67,6 +67,9 @@ public:
   /// MUST be called from the timer/update thread (same executor as RMF).
   void drain_pending_feedback();
 
+  /// Set by the Zenoh status thread, drained by the update thread as a replan.
+  bool take_pending_failure() { return pending_failure_.exchange(false); }
+
 private:
   std::string robot_name_;
   std::shared_ptr<NavigationInterface> control_adapter_;
@@ -87,6 +90,8 @@ private:
   // their own mutex.
   mutable std::mutex session_mutex_;
   std::shared_ptr<NavigationSession> session_;
+
+  std::atomic<bool> pending_failure_{false};
 
   // Apply coordinate transformation to a 2D position
   Eigen::Vector2d transform_position(const Eigen::Vector2d &rmf_position) const;
